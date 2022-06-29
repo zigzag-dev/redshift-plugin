@@ -163,10 +163,7 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
     let values: InsertQueryValue[] = []
     let valuesString = ''
 
-
-    const getPropsInsertString = (stringifiedValue: string) => {
-        return config.propertiesDataType === 'varchar' ? stringifiedValue : `JSON_PARSE(${stringifiedValue})`
-    }
+    const isSuper = config.propertiesDataType === 'super';
 
     for (let i = 0; i < payload.batch.length; ++i) {
         const { uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp } =
@@ -175,13 +172,17 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
         // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
         valuesString += ' ('
         for (let j = 1; j <= 11; ++j) {
-            valuesString += `$${11 * i + j}${j === 11 ? '' : ', '}`
+            if ((j === 2 || j === 4 || j === 5) && isSuper) {
+                valuesString += `JSON_PARSE($${11 * i + j})`
+            } else {
+                valuesString += `$${11 * i + j}${j === 11 ? '' : ', '}`
+            }
         }
         valuesString += `)${i === payload.batch.length - 1 ? '' : ','}`
 
         values = [
             ...values,
-            ...[uuid, eventName, getPropsInsertString(properties), elements, getPropsInsertString(set), getPropsInsertString(set_once), distinct_id, team_id, ip, site_url, timestamp],
+            ...[uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp],
         ]
     }
 
@@ -227,7 +228,7 @@ const executeQuery = async (query: string, values: any[], config: RedshiftMeta['
     try {
         await pgClient.connect()
         await pgClient.query(query, values)
-    } catch (err) {
+    } catch (err: any) {
         error = err
     } finally {
         await pgClient.end()
