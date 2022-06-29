@@ -169,21 +169,24 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
         const { uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp } =
             payload.batch[i]
 
+        // if is varchar using parametrised query
         // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-        valuesString += ' ('
-        for (let j = 1; j <= 11; ++j) {
-            if ((j === 2 || j === 4 || j === 5) && isSuper) {
-                valuesString += `JSON_PARSE($${11 * i + j})`
-            } else {
+        // if is super type using plain text query
+        // assemble the value into valueString and values is not needed
+        if (isSuper) {
+            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${properties}'), '${elements}', JSON_PARSE('${set}'), JSON_PARSE('${set_once}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
+        } else {
+            valuesString += ' ('
+            for (let j = 1; j <= 11; ++j) {
                 valuesString += `$${11 * i + j}${j === 11 ? '' : ', '}`
             }
-        }
-        valuesString += `)${i === payload.batch.length - 1 ? '' : ','}`
+            valuesString += `)${i === payload.batch.length - 1 ? '' : ','}`
 
-        values = [
-            ...values,
-            ...[uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp],
-        ]
+            values = [
+                ...values,
+                ...[uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp],
+            ]
+        }
     }
 
     console.log(
