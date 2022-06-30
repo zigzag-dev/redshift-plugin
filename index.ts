@@ -174,7 +174,7 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
         // if is super type using plain text query
         // assemble the value into valueString and values is not needed
         if (isSuper) {
-            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${properties}'), '${elements}', JSON_PARSE('${set}'), JSON_PARSE('${set_once}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
+            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${properties.replace(/'/g, "''")}'), '${elements}', JSON_PARSE('${set.replace(/'/g, "''")}'), JSON_PARSE('${set_once.replace(/'/g, "''")}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
         } else {
             valuesString += ' ('
             for (let j = 1; j <= 11; ++j) {
