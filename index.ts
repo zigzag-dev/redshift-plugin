@@ -232,6 +232,9 @@ const executeQuery = async (query: string, values: any[], config: RedshiftMeta['
         await pgClient.connect()
         await pgClient.query(query, values)
     } catch (err: any) {
+        console.error(`Error executing query: ${err.message}`);
+        console.error(`Query: ${query}`);
+        console.error(`uuid: ${values[0]}`);
         error = err
     } finally {
         await pgClient.end()
