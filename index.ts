@@ -1,11 +1,8 @@
 import { createBuffer } from '@posthog/plugin-contrib'
 import { Plugin, PluginMeta, PluginEvent } from '@posthog/plugin-scaffold'
 import { Client } from 'pg'
-// For some reason the native Intl.DisplayNames() API does not contain complete locale data
-// i.e. displayNames.of('ja') returns "ja" (the expected behavior should be returning "Japanese")
-// Hence polyfills have to be used here
-import '@formatjs/intl-displaynames/polyfill'
-import '@formatjs/intl-displaynames/locale-data/en'
+
+const langNames = new Intl.DisplayNames(['en'], { type: 'language' });
 
 type RedshiftPlugin = Plugin<{
     global: {
@@ -117,8 +114,6 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
         config.eventsToIgnore ? config.eventsToIgnore.split(',').map((event) => event.trim()) : null
     )
 }
-
-const langNames = new Intl.DisplayNames(['en'], { type: 'language' });
 
 export function processEvent(event: PluginEvent) {
     // Add human-readable names for browser language
