@@ -2,6 +2,8 @@ import { createBuffer } from '@posthog/plugin-contrib'
 import { Plugin, PluginMeta, PluginEvent } from '@posthog/plugin-scaffold'
 import { Client } from 'pg'
 
+const langNames = new Intl.DisplayNames(['en'], { type: 'language' });
+
 type RedshiftPlugin = Plugin<{
     global: {
         pgClient: Client
@@ -117,7 +119,6 @@ export function processEvent(event: PluginEvent) {
     // Add human-readable names for browser language
     if (event.properties && event.properties['browser_language']) {
         let inputLangCode = String(event.properties['browser_language']);
-        const langNames = new Intl.DisplayNames(['en'], { type: 'language' });
         const shortLangCodePosition = inputLangCode.indexOf('-');
 
         inputLangCode = inputLangCode.substring(0, shortLangCodePosition != -1 ? shortLangCodePosition : inputLangCode.length);
