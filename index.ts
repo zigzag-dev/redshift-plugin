@@ -2,6 +2,8 @@ import { createBuffer } from '@posthog/plugin-contrib'
 import { Plugin, PluginMeta, PluginEvent } from '@posthog/plugin-scaffold'
 import { Client } from 'pg'
 
+const langNames = new Intl.DisplayNames(['en'], { type: 'language' });
+
 type RedshiftPlugin = Plugin<{
     global: {
         pgClient: Client
@@ -111,6 +113,21 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
     global.eventsToIgnore = new Set(
         config.eventsToIgnore ? config.eventsToIgnore.split(',').map((event) => event.trim()) : null
     )
+}
+
+export function processEvent(event: PluginEvent) {
+    // Add human-readable names for browser language
+    if (event.properties && event.properties['browser_language']) {
+        let inputLangCode = String(event.properties['browser_language']);
+        const shortLangCodePosition = inputLangCode.indexOf('-');
+
+        inputLangCode = inputLangCode.substring(0, shortLangCodePosition != -1 ? shortLangCodePosition : inputLangCode.length);
+
+        event.properties['browser_language_name'] = langNames.of(inputLangCode);
+    }
+
+    // Return the event to ingest, return nothing to discard
+    return event;
 }
 
 export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
