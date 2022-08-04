@@ -2,7 +2,7 @@ import { createBuffer } from '@posthog/plugin-contrib'
 import { Plugin, PluginMeta, PluginEvent } from '@posthog/plugin-scaffold'
 import { Client } from 'pg'
 
-const langNames = new Intl.DisplayNames(['en'], { type: 'language' });
+import { getLanguageName } from './intl';
 
 type RedshiftPlugin = Plugin<{
     global: {
@@ -118,12 +118,7 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
 export function processEvent(event: PluginEvent) {
     // Add human-readable names for browser language
     if (event.properties && event.properties['browser_language']) {
-        let inputLangCode = String(event.properties['browser_language']);
-        const shortLangCodePosition = inputLangCode.indexOf('-');
-
-        inputLangCode = inputLangCode.substring(0, shortLangCodePosition != -1 ? shortLangCodePosition : inputLangCode.length);
-
-        event.properties['browser_language_name'] = langNames.of(inputLangCode);
+        event.properties['browser_language_name'] = getLanguageName(String(event.properties['browser_language']));
     }
 
     // Return the event to ingest, return nothing to discard
