@@ -28,6 +28,7 @@ type RedshiftMeta = PluginMeta<RedshiftPlugin>
 interface ParsedEvent {
     uuid: string
     eventName: string
+    shopKey: string
     properties: string
     elements: string
     set: string
@@ -79,6 +80,7 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
         `CREATE TABLE IF NOT EXISTS public.${global.sanitizedTableName} (
             uuid varchar(200),
             event varchar(200),
+            shopkey varchar(200),
             properties ${propertiesDataType},
             elements varchar(65535),
             set ${propertiesDataType},
@@ -143,6 +145,7 @@ export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
     const parsedEvent = {
         uuid,
         eventName,
+        shopKey: properties?.shop_key || '',
         properties: JSON.stringify(ingestedProperties || {}),
         elements: JSON.stringify(elements || {}),
         set: JSON.stringify($set || {}),
@@ -166,25 +169,25 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
     const isSuper = config.propertiesDataType === 'super';
 
     for (let i = 0; i < payload.batch.length; ++i) {
-        const { uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp } =
+        const { uuid, eventName, shopKey, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp } =
             payload.batch[i]
 
         // if is varchar using parametrised query
-        // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
         // if is super type using plain text query
         // assemble the value into valueString and values is not needed
         if (isSuper) {
-            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${properties.replace(/'/g, "''")}'), '${elements}', JSON_PARSE('${set.replace(/'/g, "''")}'), JSON_PARSE('${set_once.replace(/'/g, "''")}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
+            valuesString += ` ('${uuid}', '${eventName}', '${shopKey}', JSON_PARSE('${properties.replace(/'/g, "''")}'), '${elements}', JSON_PARSE('${set.replace(/'/g, "''")}'), JSON_PARSE('${set_once.replace(/'/g, "''")}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
         } else {
             valuesString += ' ('
-            for (let j = 1; j <= 11; ++j) {
-                valuesString += `$${11 * i + j}${j === 11 ? '' : ', '}`
+            for (let j = 1; j <= 12; ++j) {
+                valuesString += `$${12 * i + j}${j === 12 ? '' : ', '}`
             }
             valuesString += `)${i === payload.batch.length - 1 ? '' : ','}`
 
             values = [
                 ...values,
-                ...[uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp],
+                ...[uuid, eventName, shopKey, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp],
             ]
         }
     }
@@ -196,7 +199,7 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
     )
 
     const queryError = await executeQuery(
-        `INSERT INTO ${global.sanitizedTableName} (uuid, event, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp)
+        `INSERT INTO ${global.sanitizedTableName} (uuid, event, shopkey, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp)
         VALUES ${valuesString}`,
         values,
         config
