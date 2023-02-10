@@ -1,5 +1,5 @@
 import { createBuffer } from '@posthog/plugin-contrib'
-import { Plugin, PluginMeta, PluginEvent } from '@posthog/plugin-scaffold'
+import { Plugin, PluginMeta, PluginEvent, Properties } from '@posthog/plugin-scaffold'
 import { Client } from 'pg'
 
 type RedshiftPlugin = Plugin<{
@@ -142,6 +142,9 @@ export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
         elements = $elements
     }
 
+    sanitizeUrls(ingestedProperties);
+    sanitizeUrls($set_once)
+
     const parsedEvent = {
         uuid,
         eventName,
@@ -252,4 +255,23 @@ export const teardownPlugin: RedshiftPlugin['teardownPlugin'] = ({ global }) => 
 
 const sanitizeSqlIdentifier = (unquotedIdentifier: string): string => {
     return unquotedIdentifier.replace(/[^\w\d_.]+/g, '')
+}
+
+const sanitizeUrls = (properties: Properties | undefined): Properties | undefined => {
+    if (properties) {
+        if (properties.$current_url) {
+            properties.$current_url = JSON.stringify(properties.$current_url)
+        }
+        if (properties.$referrer) {
+            properties.$referrer = JSON.stringify(properties.$referrer)
+        }
+        if (properties.$initial_current_url) {
+            properties.$initial_current_url = JSON.stringify(properties.$initial_current_url)
+        }
+        if (properties.$initial_referrer) {
+            properties.$initial_referrer = JSON.stringify(properties.$initial_referrer)
+        }
+    }
+
+    return properties
 }
