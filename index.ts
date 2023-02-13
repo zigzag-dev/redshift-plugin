@@ -144,6 +144,7 @@ export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
 
     sanitizeUrls(ingestedProperties)
     sanitizeUrls($set_once)
+    sanitizeUrls($set)
 
     const parsedEvent = {
         uuid,
