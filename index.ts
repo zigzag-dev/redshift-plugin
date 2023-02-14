@@ -176,7 +176,7 @@ export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
         timestamp: new Date(timestamp).toISOString(),
 
         shopKey: ingestedProperties?.shop_key || '',
-        session_id: ingestedProperties?.$session_id || ingestedProperties?.checkout_session_id || '',
+        session_id: ingestedProperties?.$session_id || ingestedProperties?.$checkout_session_id || '',
         page: ingestedProperties?.checkout_page || ingestedProperties?.payment_page || '',
         continent_name: ingestedProperties?.$geoip_continent_name || '',
         country_name: ingestedProperties?.$geoip_country_name || '',
