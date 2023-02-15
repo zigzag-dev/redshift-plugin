@@ -1,5 +1,5 @@
 import { createBuffer } from '@posthog/plugin-contrib'
-import { Plugin, PluginMeta, PluginEvent } from '@posthog/plugin-scaffold'
+import { Plugin, PluginMeta, PluginEvent, Properties } from '@posthog/plugin-scaffold'
 import { Client } from 'pg'
 
 type RedshiftPlugin = Plugin<{
@@ -28,6 +28,7 @@ type RedshiftMeta = PluginMeta<RedshiftPlugin>
 interface ParsedEvent {
     uuid: string
     eventName: string
+    shopKey: string
     properties: string
     elements: string
     set: string
@@ -37,15 +38,6 @@ interface ParsedEvent {
     ip: string
     site_url: string
     timestamp: string
-
-    shopKey: string
-    session_id: string
-    page: string
-    continent_name: string
-    country_name: string
-    browser_language: string
-    device_type: string
-    referrer: string
 }
 
 type InsertQueryValue = string | number
@@ -88,6 +80,7 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
         `CREATE TABLE IF NOT EXISTS public.${global.sanitizedTableName} (
             uuid varchar(200),
             event varchar(200),
+            shopkey varchar(200),
             properties ${propertiesDataType},
             elements varchar(65535),
             set ${propertiesDataType},
@@ -96,16 +89,7 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
             team_id int,
             distinct_id varchar(200),
             ip varchar(200),
-            site_url varchar(200),
-            
-            shopkey varchar(3900),
-            session_id varchar(200),
-            page varchar(200),
-            continent_name varchar(200),
-            country_name varchar(200),
-            browser_language varchar(200),
-            device_type varchar(200),
-            referrer varchar(65535)
+            site_url varchar(200)
         );`,
         [],
         config,
@@ -161,6 +145,7 @@ export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
     const parsedEvent = {
         uuid,
         eventName,
+        shopKey: properties?.shop_key || '',
         properties: JSON.stringify(ingestedProperties || {}),
         elements: JSON.stringify(elements || {}),
         set: JSON.stringify($set || {}),
@@ -170,15 +155,6 @@ export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
         ip,
         site_url,
         timestamp: new Date(timestamp).toISOString(),
-
-        shopKey: ingestedProperties?.shop_key || '',
-        session_id: ingestedProperties?.$session_id || ingestedProperties?.checkout_session_id || '',
-        page: ingestedProperties?.checkout_page || ingestedProperties?.payment_page || '',
-        continent_name: ingestedProperties?.$geoip_continent_name || '',
-        country_name: ingestedProperties?.$geoip_country_name || '',
-        browser_language: ingestedProperties?.browser_language || '',
-        device_type: ingestedProperties?.$device_type || '',
-        referrer: ingestedProperties?.$referrer || '',
     }
 
     if (!global.eventsToIgnore.has(eventName)) {
@@ -196,6 +172,7 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
         const {
             uuid,
             eventName,
+            shopKey,
             properties,
             elements,
             set,
@@ -205,18 +182,8 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
             ip,
             site_url,
             timestamp,
-
-            shopKey,
-            session_id,
-            page,
-            continent_name,
-            country_name,
-            browser_language,
-            device_type,
-            referrer,
         } =
             payload.batch[i]
-        const payloadItemCount = 19
 
         // if is varchar using parametrised query
         // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
@@ -226,19 +193,18 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
             const p = properties.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
             const s = set.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
             const so = set_once.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
-            const r = referrer.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
 
-            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${p}'), '${elements}', JSON_PARSE('${s}'), JSON_PARSE('${so}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}', '${shopKey}', '${session_id}', '${page}', '${continent_name}', '${country_name}', '${browser_language}', '${device_type}', '${r}') ${i === payload.batch.length - 1 ? '' : ','}`
+            valuesString += ` ('${uuid}', '${eventName}', '${shopKey}', JSON_PARSE('${p}'), '${elements}', JSON_PARSE('${s}'), JSON_PARSE('${so}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
         } else {
             valuesString += ' ('
-            for (let j = 1; j <= payloadItemCount; ++j) {
-                valuesString += `$${payloadItemCount * i + j}${j === payloadItemCount ? '' : ', '}`
+            for (let j = 1; j <= 12; ++j) {
+                valuesString += `$${12 * i + j}${j === 12 ? '' : ', '}`
             }
             valuesString += `)${i === payload.batch.length - 1 ? '' : ','}`
 
             values = [
                 ...values,
-                ...[uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp, shopKey, session_id, page, continent_name, country_name, browser_language, device_type, referrer],
+                ...[uuid, eventName, shopKey, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp],
             ]
         }
     }
@@ -250,7 +216,7 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
     )
 
     const queryError = await executeQuery(
-        `INSERT INTO ${global.sanitizedTableName} (uuid, event, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp, shopkey, session_id, page, continent_name, country_name, browser_language, device_type, referrer)
+        `INSERT INTO ${global.sanitizedTableName} (uuid, event, shopkey, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp)
         VALUES ${valuesString}`,
         values,
         config,
