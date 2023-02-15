@@ -92,7 +92,7 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
             site_url varchar(200)
         );`,
         [],
-        config
+        config,
     )
 
     if (queryError) {
@@ -105,13 +105,13 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
         onFlush: async (batch) => {
             await insertBatchIntoRedshift(
                 { batch, batchId: Math.floor(Math.random() * 1000000), retriesPerformedSoFar: 0 },
-                meta
+                meta,
             )
         },
     })
 
     global.eventsToIgnore = new Set(
-        config.eventsToIgnore ? config.eventsToIgnore.split(',').map((event) => event.trim()) : null
+        config.eventsToIgnore ? config.eventsToIgnore.split(',').map((event) => event.trim()) : null,
     )
 }
 
@@ -142,10 +142,6 @@ export async function onEvent(event: PluginEvent, { global }: RedshiftMeta) {
         elements = $elements
     }
 
-    sanitizeUrls(ingestedProperties)
-    sanitizeUrls($set_once)
-    sanitizeUrls($set)
-
     const parsedEvent = {
         uuid,
         eventName,
@@ -170,10 +166,23 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
     let values: InsertQueryValue[] = []
     let valuesString = ''
 
-    const isSuper = config.propertiesDataType === 'super';
+    const isSuper = config.propertiesDataType === 'super'
 
     for (let i = 0; i < payload.batch.length; ++i) {
-        const { uuid, eventName, shopKey, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp } =
+        const {
+            uuid,
+            eventName,
+            shopKey,
+            properties,
+            elements,
+            set,
+            set_once,
+            distinct_id,
+            team_id,
+            ip,
+            site_url,
+            timestamp,
+        } =
             payload.batch[i]
 
         // if is varchar using parametrised query
@@ -181,7 +190,11 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
         // if is super type using plain text query
         // assemble the value into valueString and values is not needed
         if (isSuper) {
-            valuesString += ` ('${uuid}', '${eventName}', '${shopKey}', JSON_PARSE('${properties.replace(/'/g, "''")}'), '${elements}', JSON_PARSE('${set.replace(/'/g, "''")}'), JSON_PARSE('${set_once.replace(/'/g, "''")}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
+            const p = properties.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
+            const s = set.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
+            const so = set_once.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
+
+            valuesString += ` ('${uuid}', '${eventName}', '${shopKey}', JSON_PARSE('${p}'), '${elements}', JSON_PARSE('${s}'), JSON_PARSE('${so}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === payload.batch.length - 1 ? '' : ','}`
         } else {
             valuesString += ' ('
             for (let j = 1; j <= 12; ++j) {
@@ -199,14 +212,14 @@ export const insertBatchIntoRedshift = async (payload: UploadJobPayload, { globa
     console.log(
         `(Batch Id: ${payload.batchId}) Flushing ${payload.batch.length} event${
             payload.batch.length > 1 ? 's' : ''
-        } to RedShift`
+        } to RedShift`,
     )
 
     const queryError = await executeQuery(
         `INSERT INTO ${global.sanitizedTableName} (uuid, event, shopkey, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp)
         VALUES ${valuesString}`,
         values,
-        config
+        config,
     )
 
     if (queryError) {
@@ -239,9 +252,9 @@ const executeQuery = async (query: string, values: any[], config: RedshiftMeta['
         await pgClient.connect()
         await pgClient.query(query, values)
     } catch (err: any) {
-        console.error(`Error executing query: ${err.message}`);
-        console.error(`Query: ${query}`);
-        console.error(`uuid: ${values[0]}`);
+        console.error(`Error executing query: ${err.message}`)
+        console.error(`Query: ${query}`)
+        console.error(`uuid: ${values[0]}`)
         error = err
     } finally {
         await pgClient.end()
@@ -256,23 +269,4 @@ export const teardownPlugin: RedshiftPlugin['teardownPlugin'] = ({ global }) => 
 
 const sanitizeSqlIdentifier = (unquotedIdentifier: string): string => {
     return unquotedIdentifier.replace(/[^\w\d_.]+/g, '')
-}
-
-const sanitizeUrls = (properties: Properties | undefined): Properties | undefined => {
-    if (properties) {
-        if (properties.$current_url) {
-            properties.$current_url = properties.$current_url.replace('\\', '')
-        }
-        if (properties.$referrer) {
-            properties.$referrer = properties.$referrer.replace('\\', '')
-        }
-        if (properties.$initial_current_url) {
-            properties.$initial_current_url = properties.$initial_current_url.replace('\\', '')
-        }
-        if (properties.$initial_referrer) {
-            properties.$initial_referrer = properties.$initial_referrer.replace('\\', '')
-        }
-    }
-
-    return properties
 }
