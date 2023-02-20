@@ -142,39 +142,44 @@ export const insertBatchIntoRedshift = async (events: ParsedEvent[], { global, c
     let values: InsertQueryValue[] = []
     let valuesString = ''
 
-    function getPropsInsertString(stringifiedValue: string) {
-        stringifiedValue = stringifiedValue.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
-
-        return config.propertiesDataType === 'super' ? `JSON_PARSE(${stringifiedValue})` : stringifiedValue
-    }
+    const isSuper = config.propertiesDataType === 'super'
 
     for (let i = 0; i < events.length; ++i) {
         const { uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp } =
             events[i]
 
-        // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-        valuesString += ' ('
-        for (let j = 1; j <= 11; ++j) {
-            valuesString += `$${11 * i + j}${j === 11 ? '' : ', '}`
-        }
-        valuesString += `)${i === events.length - 1 ? '' : ','}`
+        if (isSuper) {
+            const p = properties.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
+            const s = set.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
+            const so = set_once.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
 
-        values = [
-            ...values,
-            ...[
-                uuid,
-                eventName,
-                getPropsInsertString(properties),
-                elements,
-                getPropsInsertString(set),
-                getPropsInsertString(set_once),
-                distinct_id,
-                team_id,
-                ip,
-                site_url,
-                timestamp,
-            ],
-        ]
+            // Keep values = [], or JSON_PARSE() will be written as string instead of Redshift function calls
+            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${p}'), '${elements}', JSON_PARSE('${s}'), JSON_PARSE('${so}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === events.length - 1 ? '' : ','}`
+        } else {
+            // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            valuesString += ' ('
+            for (let j = 1; j <= 11; ++j) {
+                valuesString += `$${11 * i + j}${j === 11 ? '' : ', '}`
+            }
+            valuesString += `)${i === events.length - 1 ? '' : ','}`
+
+            values = [
+                ...values,
+                ...[
+                    uuid,
+                    eventName,
+                    properties,
+                    elements,
+                    set,
+                    set_once,
+                    distinct_id,
+                    team_id,
+                    ip,
+                    site_url,
+                    timestamp,
+                ],
+            ]
+        }
     }
 
     console.log(`Flushing ${events.length} event${events.length > 1 ? 's' : ''} to RedShift`)
