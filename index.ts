@@ -91,7 +91,7 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
 }
 
 export async function exportEvents(events: ProcessedPluginEvent[], meta: RedshiftMeta) {
-    const eventsToExport = events.filter((event) => !meta.global.eventsToIgnore.has(event.event))
+    const eventsToExport = events.filter((event) => !meta?.global?.eventsToIgnore || !meta.global.eventsToIgnore.has(event.event))
     const parsedEvents = eventsToExport.map(parseEvent)
 
     await insertBatchIntoRedshift(parsedEvents, meta)
@@ -223,7 +223,9 @@ const executeQuery = async (query: string, values: any[], config: RedshiftMeta['
 }
 
 export const teardownPlugin: RedshiftPlugin['teardownPlugin'] = ({ global }) => {
-    global.buffer.flush()
+    if (global?.buffer) {
+        global.buffer.flush()
+    }
 }
 
 const sanitizeSqlIdentifier = (unquotedIdentifier: string): string => {
