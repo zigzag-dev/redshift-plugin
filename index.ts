@@ -182,18 +182,20 @@ export const insertBatchIntoRedshift = async (events: ParsedEvent[], { global, c
         }
     }
 
-    console.log(`Flushing ${events.length} event${events.length > 1 ? 's' : ''} to RedShift`)
+    if (valuesString) {
+        console.log(`Flushing ${events.length} event${events.length > 1 ? 's' : ''} to RedShift`)
 
-    const queryError = await executeQuery(
-        `INSERT INTO ${global.sanitizedTableName} (uuid, event, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp)
+        const queryError = await executeQuery(
+            `INSERT INTO ${global.sanitizedTableName} (uuid, event, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp)
         VALUES ${valuesString}`,
-        values,
-        config,
-    )
+            values,
+            config,
+        )
 
-    if (queryError) {
-        console.error(`Error uploading to Redshift: ${queryError.message}. Setting up retries...`)
-        throw new RetryError()
+        if (queryError) {
+            console.error(`Error uploading to Redshift: ${queryError.message}. Setting up retries...`)
+            throw new RetryError()
+        }
     }
 }
 
