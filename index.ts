@@ -29,13 +29,13 @@ interface ParsedEvent {
     uuid: string
     eventName: string
     properties: string
-    elements: string
+    // elements: string
     set: string
     set_once: string
     distinct_id: string
-    team_id: number
+    // team_id: number
     ip: string
-    site_url: string
+    // site_url: string
     timestamp: string
 }
 
@@ -68,14 +68,11 @@ export const setupPlugin: RedshiftPlugin['setupPlugin'] = async (meta) => {
             uuid varchar(200),
             event varchar(200),
             properties ${propertiesDataType},
-            elements varchar(65535),
             set ${propertiesDataType},
             set_once ${propertiesDataType},
             timestamp timestamp with time zone,
-            team_id int,
             distinct_id varchar(200),
-            ip varchar(200),
-            site_url varchar(200)
+            ip varchar(200)
         );`,
         [],
         config,
@@ -104,7 +101,6 @@ export const parseEvent = (event: ProcessedPluginEvent): ParsedEvent => {
         $set,
         $set_once,
         distinct_id,
-        team_id,
         uuid,
         ..._discard
     } = event
@@ -112,26 +108,36 @@ export const parseEvent = (event: ProcessedPluginEvent): ParsedEvent => {
     const ip = properties?.['$ip'] || event.ip
     const timestamp = event.timestamp || properties?.timestamp
     let ingestedProperties = properties
-    let elements = []
+    // let elements = []
 
     // only move prop to elements for the $autocapture action
-    if (eventName === '$autocapture' && properties && '$elements' in properties) {
-        const { $elements, ...props } = properties
-        ingestedProperties = props
-        elements = $elements
+    // if (eventName === '$autocapture' && properties && '$elements' in properties) {
+    //     const { $elements, ...props } = properties
+    //     ingestedProperties = props
+    //     elements = $elements
+    // }
+
+    if ('$plugins_succeeded' in ingestedProperties) {
+        delete ingestedProperties.$plugins_succeeded;
+    }
+    if ('$plugins_failed' in ingestedProperties) {
+        delete ingestedProperties.$plugins_failed;
+    }
+    if ('$plugins_deferred' in ingestedProperties) {
+        delete ingestedProperties.$plugins_deferred;
     }
 
     const parsedEvent = {
         uuid,
         eventName,
         properties: JSON.stringify(ingestedProperties || {}),
-        elements: JSON.stringify(elements || {}),
+        // elements: JSON.stringify(elements || {}),
         set: JSON.stringify($set || {}),
         set_once: JSON.stringify($set_once || {}),
         distinct_id,
-        team_id,
+        // team_id,
         ip,
-        site_url: '',
+        // site_url: '',
         timestamp: new Date(timestamp).toISOString(),
     }
 
@@ -143,9 +149,10 @@ export const insertBatchIntoRedshift = async (events: ParsedEvent[], { global, c
     let valuesString = ''
 
     const isSuper = config.propertiesDataType === 'super'
+    const columnCount = 8;
 
     for (let i = 0; i < events.length; ++i) {
-        const { uuid, eventName, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp } =
+        const { uuid, eventName, properties, set, set_once, distinct_id, ip, timestamp } =
             events[i]
 
         if (isSuper) {
@@ -154,12 +161,12 @@ export const insertBatchIntoRedshift = async (events: ParsedEvent[], { global, c
             const so = set_once.replace(/'/g, '\'\'').replace(/\\"|\\/g, '')
 
             // Keep values = [], or JSON_PARSE() will be written as string instead of Redshift function calls
-            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${p}'), '${elements}', JSON_PARSE('${s}'), JSON_PARSE('${so}'), '${distinct_id}', ${team_id}, '${ip}', '${site_url}', '${timestamp}') ${i === events.length - 1 ? '' : ','}`
+            valuesString += ` ('${uuid}', '${eventName}', JSON_PARSE('${p}'), JSON_PARSE('${s}'), JSON_PARSE('${so}'), '${distinct_id}', '${ip}', '${timestamp}') ${i === events.length - 1 ? '' : ','}`
         } else {
             // Creates format: ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11), ($12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
             valuesString += ' ('
-            for (let j = 1; j <= 11; ++j) {
-                valuesString += `$${11 * i + j}${j === 11 ? '' : ', '}`
+            for (let j = 1; j <= columnCount; ++j) {
+                valuesString += `$${columnCount * i + j}${j === columnCount ? '' : ', '}`
             }
             valuesString += `)${i === events.length - 1 ? '' : ','}`
 
@@ -169,13 +176,13 @@ export const insertBatchIntoRedshift = async (events: ParsedEvent[], { global, c
                     uuid,
                     eventName,
                     properties,
-                    elements,
+                    // elements,
                     set,
                     set_once,
                     distinct_id,
-                    team_id,
+                    // team_id,
                     ip,
-                    site_url,
+                    // site_url,
                     timestamp,
                 ],
             ]
@@ -186,7 +193,7 @@ export const insertBatchIntoRedshift = async (events: ParsedEvent[], { global, c
         console.log(`Flushing ${events.length} event${events.length > 1 ? 's' : ''} to RedShift`)
 
         const queryError = await executeQuery(
-            `INSERT INTO ${global.sanitizedTableName} (uuid, event, properties, elements, set, set_once, distinct_id, team_id, ip, site_url, timestamp)
+            `INSERT INTO ${global.sanitizedTableName} (uuid, event, properties, set, set_once, distinct_id, ip, timestamp)
         VALUES ${valuesString}`,
             values,
             config,
