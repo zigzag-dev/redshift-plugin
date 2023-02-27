@@ -117,6 +117,16 @@ export const parseEvent = (event: ProcessedPluginEvent): ParsedEvent => {
     //     elements = $elements
     // }
 
+    if ('$plugins_succeeded' in ingestedProperties) {
+        delete ingestedProperties.$plugins_succeeded;
+    }
+    if ('$plugins_failed' in ingestedProperties) {
+        delete ingestedProperties.$plugins_failed;
+    }
+    if ('$plugins_deferred' in ingestedProperties) {
+        delete ingestedProperties.$plugins_deferred;
+    }
+
     const parsedEvent = {
         uuid,
         eventName,
